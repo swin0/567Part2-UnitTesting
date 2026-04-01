@@ -66,15 +66,14 @@ def compute_check_digit(number_str):
 
 # Requirement 1
 
-def scan_mrz():
+def scan_mrz(raw_text):
     """
     Simulates scanning MRZ from a hardware device.
-
-    Returns:
-        tuple: (line1, line2)
+    Requirement 1a: Accept raw text output directly from hardware scanner.
+    Requirement 1b: Return processed MRZ as an array of two strings.
     """
     # Hardware not implemented yet
-    pass
+    return ["", ""]
 
 
 # Requirement 2
@@ -155,8 +154,9 @@ def encode_mrz(data):
     ]
 
     for field in required_fields:
-        if field not in data:
-            raise ValueError(f"Missing required field: {field}")
+            # Added 'is None' check to satisfy Requirement 3c
+            if field not in data or data[field] is None:
+                raise ValueError(f"Missing or null required field: {field}")
 
     line1 = (
         data.get("document_type", "P") +
@@ -210,47 +210,43 @@ def encode_mrz(data):
 
 def validate_check_digits(fields):
     """
-    Validates check digits and reports mismatches.
-
-    Args:
-        fields (dict)
+    Validates check digits and reports mismatches according to Requirement 4.
 
     Returns:
-        list: mismatched field names
+        dict: A structured validation result with success status and detailed mismatches.
     """
-    mismatches = []
+    validation_result = {
+        "success": True,
+        "mismatches": []
+    }
 
-    expected = str(compute_check_digit(fields["passport_number"]))
-    if expected != fields["passport_check"]:
-        mismatches.append("passport_number")
+    def check_field(field_name, original_value, extracted_check_digit):
+        expected_check = str(compute_check_digit(original_value))
+        if expected_check != extracted_check_digit:
+            validation_result["success"] = False
+            validation_result["mismatches"].append({
+                "field_name": field_name,
+                "original_value": original_value,
+                "expected_check_digit": expected_check,
+                "computed_check_digit": extracted_check_digit
+            })
 
-    expected = str(compute_check_digit(fields["birth_date"]))
-    if expected != fields["birth_check"]:
-        mismatches.append("birth_date")
+    check_field("passport_number", fields["passport_number"], fields["passport_check"])
+    check_field("birth_date", fields["birth_date"], fields["birth_check"])
+    check_field("expiry_date", fields["expiry_date"], fields["expiry_check"])
+    check_field("personal_number", fields["personal_number"], fields["personal_number_check"])
 
-    expected = str(compute_check_digit(fields["expiry_date"]))
-    if expected != fields["expiry_check"]:
-        mismatches.append("expiry_date")
-
-    expected = str(compute_check_digit(fields["personal_number"]))
-    if expected != fields["personal_number_check"]:
-        mismatches.append("personal_number")
-
+    # Requirement 4 composite check
     composite_data = (
-        fields["passport_number"] +
-        fields["passport_check"] +
-        fields["birth_date"] +
-        fields["birth_check"] +
-        fields["expiry_date"] +
-        fields["expiry_check"] +
-        fields["personal_number"] +
-        fields["personal_number_check"]
+        fields["passport_number"] + fields["passport_check"] +
+        fields["birth_date"] + fields["birth_check"] +
+        fields["expiry_date"] + fields["expiry_check"] +
+        fields["personal_number"] + fields["personal_number_check"]
     )
-    expected = str(compute_check_digit(composite_data))
-    if expected != fields["final_check"]:
-        mismatches.append("final_check")
+    
+    check_field("final_check", composite_data, fields["final_check"])
 
-    return mismatches
+    return validation_result
 
 # Optional main
 
