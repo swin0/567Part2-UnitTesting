@@ -158,5 +158,71 @@ class TestMRTD(unittest.TestCase):
         # Check that missing personal number is handled correctly (defaults to empty string, padded with '<')
         self.assertTrue(line2.endswith("<" * 14 + "00"), "Missing personal_number was not padded correctly.")
         
+    def test_decode_mrz_length_boundaries(self):
+        """Kills mutants that change the '44' length check to 43 or 45."""
+        line_43 = "A" * 43
+        line_45 = "A" * 45
+        with self.assertRaises(ValueError):
+            MRTD.decode_mrz(line_43, self.valid_line2)
+        with self.assertRaises(ValueError):
+            MRTD.decode_mrz(line_45, self.valid_line2)
+        with self.assertRaises(ValueError):
+            MRTD.decode_mrz(self.valid_line1, line_43)
+        with self.assertRaises(ValueError):
+            MRTD.decode_mrz(self.valid_line1, line_45)
+
+    def test_decode_mrz_all_fields(self):
+        """Kills mutants that alter the slicing indices of fields not previously asserted."""
+        fields = MRTD.decode_mrz(self.valid_line1, self.valid_line2)
+        
+        # Asserting the fields that were previously ignored
+        self.assertEqual(fields["name"], "ERIKSSON  ANNA MARIA")
+        self.assertEqual(fields["raw_name"], "ERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<")
+        self.assertEqual(fields["nationality"], "UTO")
+        self.assertEqual(fields["birth_date"], "740812")
+        self.assertEqual(fields["expiry_date"], "120415")
+        self.assertEqual(fields["personal_number"], "ZE184226B<<<<<")
+
+    def test_encode_mrz_truncation(self):
+        """Kills mutants that alter the [:9], [:3], etc. truncation limits."""
+        long_data = {
+            "document_type": "P",
+            "issuing_country": "UTOOO", # Too long, should be 3
+            "name": "A" * 50, # Too long, should be truncated to fit 39
+            "passport_number": "1234567890", # 10 chars, should be 9
+            "nationality": "UTOO", # 4 chars, should be 3
+            "birth_date": "7408123", # 7 chars, should be 6
+            "gender": "FM", # 2 chars, should be 1
+            "expiry_date": "1204156", # 7 chars, should be 6
+            "personal_number": "123456789012345" # 15 chars, should be 14
+        }
+        line1, line2 = MRTD.encode_mrz(long_data)
+        
+        # Verify truncation happened at the exact right characters
+        self.assertEqual(line1[2:5], "UTO") 
+        self.assertEqual(line2[0:9], "123456789") 
+        self.assertEqual(line2[10:13], "UTO") 
+        self.assertEqual(line2[13:19], "740812") 
+        self.assertEqual(line2[20], "F") 
+        self.assertEqual(line2[21:27], "120415") 
+        self.assertEqual(line2[28:42], "12345678901234") 
+
+    def test_validation_mismatch_other_fields(self):
+        """Kills mutants that delete the check_field function calls for birth, expiry, and personal numbers."""
+        fields = MRTD.decode_mrz(self.valid_line1, self.valid_line2)
+        
+        # Corrupt the other check digits
+        fields["birth_check"] = "9" if fields["birth_check"] == "0" else "0"
+        fields["expiry_check"] = "9" if fields["expiry_check"] == "0" else "0"
+        fields["personal_number_check"] = "9" if fields["personal_number_check"] == "0" else "0"
+        
+        validation = MRTD.validate_check_digits(fields)
+        self.assertFalse(validation["success"])
+        
+        mismatched_fields = [m["field_name"] for m in validation["mismatches"]]
+        self.assertIn("birth_date", mismatched_fields)
+        self.assertIn("expiry_date", mismatched_fields)
+        self.assertIn("personal_number", mismatched_fields)
+        
 if __name__ == '__main__':
     unittest.main()
