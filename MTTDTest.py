@@ -120,5 +120,43 @@ class TestMRTD(unittest.TestCase):
         self.assertIn("passport_number", mismatched_fields)
         self.assertIn("final_check", mismatched_fields) # Final check also fails if a sub-field fails
 
+    # ==========================================
+    # Additional Test Cases for Mutation Testing
+    # ==========================================
+
+    def test_decode_mrz_invalid_type_line2(self):
+        """Kills mutants altering the type check on line2."""
+        with self.assertRaises(ValueError):
+            MRTD.decode_mrz(self.valid_line1, 12345)
+
+    def test_decode_mrz_invalid_length_line2(self):
+        """Kills mutants altering the length check on line2."""
+        with self.assertRaises(ValueError):
+            MRTD.decode_mrz(self.valid_line1, "SHORTLINE")
+
+    def test_encode_mrz_uses_default_values(self):
+        """
+        Kills mutants that alter the default fallback strings in encode_mrz 
+        (e.g., changing 'USA' to something else) by providing a dictionary 
+        that lacks the optional fields.
+        """
+        minimal_data = {
+            "passport_number": "123456789",
+            "nationality": "CAN",
+            "birth_date": "900101",
+            "gender": "M",
+            "expiry_date": "300101"
+            # Missing document_type, issuing_country, name, and personal_number
+        }
+        
+        line1, line2 = MRTD.encode_mrz(minimal_data)
+        
+        # Check that the default values were actually used
+        self.assertTrue(line1.startswith("P<USA"), "Default document_type 'P' and country 'USA' were not used.")
+        self.assertIn("DOE<<JOHN", line1, "Default name was not used.")
+        
+        # Check that missing personal number is handled correctly (defaults to empty string, padded with '<')
+        self.assertTrue(line2.endswith("<" * 14 + "00"), "Missing personal_number was not padded correctly.")
+        
 if __name__ == '__main__':
     unittest.main()
