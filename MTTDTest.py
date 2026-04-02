@@ -224,5 +224,14 @@ class TestMRTD(unittest.TestCase):
         self.assertIn("expiry_date", mismatched_fields)
         self.assertIn("personal_number", mismatched_fields)
         
+    def test_scan_mrz_stub_direct(self):
+        """Kills CRP mutants hiding in the un-mocked scan_mrz stub."""
+        result = MRTD.scan_mrz("raw_text")
+        self.assertEqual(result, ["", ""])
+
+    def test_fetch_data_from_db_stub_direct(self):
+        """Kills mutants hiding in the database stub."""
+        self.assertIsNone(MRTD.fetch_data_from_db())
+        
 if __name__ == '__main__':
     unittest.main()
